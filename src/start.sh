@@ -17,7 +17,7 @@ cleanup() {
 # check if $LLAMA_SERVER_CMD_ARGS is set
 if [ -z "$LLAMA_SERVER_CMD_ARGS" ]; then
     echo "start.sh: Warning: LLAMA_SERVER_CMD_ARGS is not set. Defaulting to -hf unsloth/gemma-3-270m-it-GGUF:Q6_K --ctx-size 4096"
-    LLAMA_SERVER_CMD_ARGS="-hf unsloth/gemma-3-270m-it-GGUF:Q6_K --ctx-size 4096"
+    LLAMA_SERVER_CMD_ARGS="-hf unsloth/gemma-3-270m-it-GGUF:Q6_K --ctx-size 4096 -ngl 99"
 fi
 
 # check if the substring /workspace is in LLAMA_SERVER_CMD_ARGS
@@ -43,7 +43,7 @@ echo "start.sh: Stopping existing llama-server instances (if any)..."
 }
 
 # we have a string with all the command line arguments in the env var LLAMA_SERVER_CMD_ARGS;
-# it contains a.e. "-hf modelname --ctx-size 4096".
+# it contains a.e. "-hf modelname --ctx-size 4096 -ngl 99".
 
 echo "start.sh: Running llama-server $LLAMA_SERVER_CMD_ARGS --port 3098"
 
@@ -68,7 +68,8 @@ echo "start.sh: Waiting for llama-server to start..."
 
 # wait for the server to start
 while ! check_server_is_running; do
-    sleep 5
+    # we don't want to lose too much time, so we check very frequently
+    sleep 0.5
 done
 
 echo "start.sh: llama-server is up and running, delegating to the handler script."

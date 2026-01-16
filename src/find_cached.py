@@ -1,57 +1,69 @@
 """
-Finds the full LLM GGUF path from the Hugging Face cache.
+Finds the full GGUF path from the Hugging Face cache using huggingface_hub.
 """
 
-import os
 import argparse
+import os
+from huggingface_hub import snapshot_download, scan_cache_dir
 
-CACHE_DIR = "/runpod-volume/huggingface-cache/hub"
 
-
-def find_model_path(model_name, gguf_in_repo="model.gguf"):
+def find_model_path(model_name: str, gguf_in_repo: str) -> str | None:
     """
-    Find the path to a cached model.
+    Resolve the GGUF file path from the Hugging Face cache.
 
     Args:
-        model_name: The model name from Hugging Face
+        model_name: Hugging Face repo id (e.g. TheBloke/Mistral-7B-GGUF)
+        gguf_in_repo: Relative path to the GGUF file inside the repo
 
     Returns:
-        The full path to the cached model, or None if not found
+        Full filesystem path to the GGUF file, or None if not found
     """
 
-    cache_name = model_name.replace("/", "--")
-    snapshots_dir = os.path.join(
-        CACHE_DIR, f"models--{cache_name}", "snapshots"
-    )
+    # First try the official way: resolve snapshot path from cache
+    try:
+        snapshot_path = snapshot_download(
+            repo_id=model_name,
+            local_files_only=True
+        )
+        candidate = os.path.join(snapshot_path, gguf_in_repo)
+        if os.path.isfile(candidate):
+            return candidate
+    except Exception:
+        pass
 
-    if os.path.exists(snapshots_dir):
-        snapshots = os.listdir(snapshots_dir)
-
-        if snapshots:
-            return os.path.join(snapshots_dir, snapshots[0], gguf_in_repo)
+    # Fallback: scan cache metadata explicitly (no downloads)
+    cache = scan_cache_dir()
+    for repo in cache.repos:
+        if repo.repo_id == model_name:
+            for revision in repo.revisions:
+                candidate = os.path.join(revision.snapshot_path, gguf_in_repo)
+                if os.path.isfile(candidate):
+                    return candidate
 
     return None
 
 
 def main():
-    """
-    Main function to find and print the model path.
-    """
-
     parser = argparse.ArgumentParser(
         description="Find the full GGUF path from the Hugging Face cache."
     )
     parser.add_argument(
-        "model", type=str, help="The model name from Hugging Face"
+        "model",
+        type=str,
+        help="Hugging Face model repo id (e.g. TheBloke/Mistral-7B-GGUF)",
     )
     parser.add_argument(
         "path",
         type=str,
-        help="The path to the GGUF file within the model repository",
+        help="Relative path to the GGUF file inside the repo",
     )
     args = parser.parse_args()
 
     model_path = find_model_path(args.model, args.path)
+
+    if model_path is None:
+        raise SystemExit("GGUF file not found in Hugging Face cache")
+
     print(model_path, end="")
 
 
